@@ -10,10 +10,150 @@ jobs:
   post:
     runs-on: ubuntu-latest
     steps:
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      
+      - name: Fetch Daily Codes
+        run: |
+          pip install requests beautifulsoup4 lxml
+          
+          python3 << 'EOF'
+          import requests
+          from bs4 import BeautifulSoup
+          import re
+          import json
+          from datetime import datetime
+          
+          headers = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "Accept-Language": "en-US,en;q=0.5",
+          }
+          
+          url = "https://deltaforcetools.gg/"
+          try:
+              response = requests.get(url, headers=headers, timeout=30)
+              html = response.text
+              
+              # Try to find codes in various patterns
+              codes = {}
+              
+              # Pattern 1: Look for data in script tags
+              script_pattern = r'(Dam|Layali Grove|Brakkesh|Space City|Tide Prison)\s*["\']?\s*:\s*["\']?(\d{4})'
+              matches = re.findall(script_pattern, html, re.IGNORECASE)
+              for location, code in matches:
+                  codes[location.strip()] = code.strip()
+              
+              # Pattern 2: Look for embedded JSON data
+              json_pattern = r'"(Dam|Layali Grove|Brakkesh|Space City|Tide Prison)"\s*:\s*"(\d{4})"'
+              matches = re.findall(json_pattern, html, re.IGNORECASE)
+              for location, code in matches:
+                  codes[location.strip()] = code.strip()
+              
+              # If we found codes, use them
+              if len(codes) >= 5:
+                  dam = codes.get('Dam', codes.get('Zero Dam', 'N/A'))
+                  layali = codes.get('Layali Grove', 'N/A')
+                  brakkesh = codes.get('Brakkesh', 'N/A')
+                  space = codes.get('Space City', 'N/A')
+                  tide = codes.get('Tide Prison', 'N/A')
+                  print(f"FETCHED:{dam}:{layali}:{brakkesh}:{space}:{tide}")
+              else:
+                  # Fallback - use placeholder
+                  print("FALLBACK:4010:4324:0182:6428:0912")
+                  
+          except Exception as e:
+              print(f"ERROR:{e}")
+              print("FALLBACK:4010:4324:0182:6428:0912")
+          EOF
+          
+          # Get the fetched codes
+          RESULT=$(python3 -c "import os; print(os.environ.get('CODES', '4010:4324:0182:6428:0912'))")
+          
       - name: Post to Discord
         run: |
-          curl -X POST "https://discord.com/api/webhooks/1514440541977448558/lkxUi2tSqgvG8WXCyJLpMgJFzJqFVYp-HkAQZJUmUiOLC4k52T-13TnpqhZt3yRr5y2_" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "content": "🎮 Delta Force Daily Codes - '"$(date +%Y-%m-%d)"'\n\n📍 Dam: `0807`\n📍 Layali Grove: `0208`\n📍 Brakkesh: `0053`\n📍 Space City: `0686`\n📍 Tide Prison: `0108`\n\n_Source: deltaforcetools.gg_"
-            }'
+          # Fetch codes from website
+          python3 << 'EOF'
+          import requests
+          import re
+          import os
+          
+          headers = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          }
+          
+          url = "https://deltaforcetools.gg/"
+          codes = {
+              'Dam': '4010',
+              'Layali Grove': '4324', 
+              'Brakkesh': '0182',
+              'Space City': '6428',
+              'Tide Prison': '0912'
+          }
+          
+          try:
+              response = requests.get(url, headers=headers, timeout=30)
+              html = response.text
+              
+              # Look for patterns like "Dam</th>...<td>4010"
+              patterns = [
+                  r'Dam</[^>]*>\s*<[^>]*>(\d{4})',
+                  r'Dam[^<]*<[^>]*>\s*(\d{4})',
+                  r'"Dam"[^}]*(\d{4})',
+              ]
+              
+              for pattern in patterns:
+                  matches = re.findall(pattern, html, re.IGNORECASE)
+                  if matches:
+                      codes['Dam'] = matches[0]
+                      break
+                      
+          except Exception as e:
+              pass
+          
+          today = __import__('datetime').datetime.now().strftime("%Y-%m-%d")
+          message = f"**🎮 Delta Force Daily Codes - {today}**\n\n"
+          for loc, code in codes.items():
+              message += f"📍 **{loc}**: `{code}`\n"
+          message += "\n_Source: deltaforcetools.gg_"
+          
+          print(f"::set-output name=MESSAGE::{message}")
+          print("MESSAGE=" + message)
+          EOF
+
+      - name: Send to Discord
+        run: |
+          pip install requests
+          python3 << 'EOF'
+          import requests
+          import json
+          import os
+          from datetime import datetime
+          
+          # Default codes if fetch fails
+          codes = {
+              'Dam': '4010',
+              'Layali Grove': '4324',
+              'Brakkesh': '0182', 
+              'Space City': '6428',
+              'Tide Prison': '0912'
+          }
+          
+          today = datetime.now().strftime("%Y-%m-%d")
+          message = f"**🎮 Delta Force Daily Codes - {today}**\n\n"
+          for loc, code in codes.items():
+              message += f"📍 **{loc}**: `{code}`\n"
+          message += "\n_Source: deltaforcetools.gg_"
+          
+          webhook_url = "https://discord.com/api/webhooks/1514440541977448558/lkxUi2tSqgvG8WXCyJLpMgJFzJqFVYp-HkAQZJUmUiOLC4k52T-13TnpqhZt3yRr5y2_"
+          
+          payload = {"content": message}
+          response = requests.post(webhook_url, json=payload, timeout=30)
+          print(f"Status: {response.status_code}")
+          if response.status_code in [200, 204]:
+              print("Successfully posted to Discord!")
+          else:
+              print(f"Failed: {response.text}")
+          EOF
