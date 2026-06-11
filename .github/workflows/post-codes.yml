@@ -1,0 +1,19 @@
+name: Post Daily Codes to Discord
+
+on:
+  schedule:
+    # 每天北京时间9点 = UTC 1点
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Discord
+        run: |
+          curl -X POST "https://discord.com/api/webhooks/1514440541977448558/lkxUi2tSqgvG8WXCyJLpMgJFzJqFVYp-HkAQZJUmUiOLC4k52T-13TnpqhZt3yRr5y2_" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "content": "🎮 Delta Force Daily Codes - '"$(date +%Y-%m-%d)"'\n\n📍 Dam: `0807`\n📍 Layali Grove: `0208`\n📍 Brakkesh: `0053`\n📍 Space City: `0686`\n📍 Tide Prison: `0108`\n\n_Source: deltaforcetools.gg_"
+            }'
