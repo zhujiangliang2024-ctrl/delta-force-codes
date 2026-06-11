@@ -79,7 +79,7 @@ jobs:
           
           message = ""
           if notify:
-              message += "@everyone \n\n"
+              message += "@door code notifications \n\n"
           
           message += f"**🎮 Delta Force Daily Codes - {today}**\n\n"
           for loc, code in codes.items():
