@@ -39,17 +39,12 @@ jobs:
               
               if idx != -1 and end_idx != -1:
                   section = html_content[idx:end_idx]
-                  # Unescape the JavaScript string literals
                   unescaped = section.replace('\\"', '"')
                   
-                  # Extract codes: "pwd":"XXXX"
                   codes_list = re.findall(r'"pwd":"(\d{4})"', unescaped)
-                  # Extract locations: "en":"LOCATION"
                   locs_list = re.findall(r'"en":"([^"]+)"', unescaped)
-                  # Extract image URLs: "pic":"URL"
                   pics_list = re.findall(r'"pic":"([^"]+)"', unescaped)
                   
-                  # Build codes dictionary with images
                   codes = {}
                   for i, loc in enumerate(locs_list):
                       if i < len(codes_list):
@@ -64,45 +59,29 @@ jobs:
           
           webhook_url = "https://discord.com/api/webhooks/1514440541977448558/lkxUi2tSqgvG8WXCyJLpMgJFzJqFVYp-HkAQZJUmUiOLC4k52T-13TnpqhZt3yRr5y2_"
           
-          # Build embed message with images
-          payload = {
-              "content": "@door code notifications",
-              "embeds": [
-                  {
-                      "title": f"🎮 Delta Force Daily Codes - {today}",
-                      "color": 5814783,  # Green color
-                      "fields": [],
-                      "footer": {
-                          "text": "Source: deltaforcetools.gg"
-                      }
-                  }
-              ]
-          }
-          
-          # Add fields for each location
+          # Create 5 embeds, one for each location with its image
+          embeds = []
           for loc, data in codes.items():
-              field = {
-                  "name": f"📍 {loc}",
-                  "value": f"Code: `{data['code']}`",
-                  "inline": True
+              embed = {
+                  "title": f"📍 {loc}",
+                  "description": f"**Code:** `{data['code']}`",
+                  "color": 5814783,
+                  "image": {"url": data['pic']} if data['pic'] else None,
+                  "footer": {"text": f"deltaforcetools.gg • {today}"}
               }
-              payload["embeds"][0]["fields"].append(field)
+              # Remove None values
+              embed = {k: v for k, v in embed.items() if v is not None}
+              embeds.append(embed)
           
-          # Add thumbnail images for each location
-          for loc, data in codes.items():
-              if data['pic']:
-                  # Add location image as additional field with inline image reference
-                  thumbnail_url = data['pic'].split('?')[0] + "?wx_fmt=png" if data['pic'] else ""
-                  # For webhooks, we can add one image per embed, so we'll use the first location's image
-                  if "image" not in payload["embeds"][0]:
-                      payload["embeds"][0]["image"] = {"url": data['pic']}
-                      payload["embeds"][0]["thumbnail"] = {"url": data['pic']}
-                  break
+          payload = {
+              "content": f"@door code notifications\n\n**🎮 Delta Force Daily Codes - {today}**",
+              "embeds": embeds
+          }
           
           response = requests.post(webhook_url, json=payload, timeout=30)
           print(f"Status: {response.status_code}")
           if response.status_code in [200, 204]:
-              print("Successfully posted to Discord!")
+              print("Successfully posted 5 images to Discord!")
           else:
-            print(f"Failed: {response.text}")
+              print(f"Failed: {response.text}")
           EOF
