@@ -5,11 +5,6 @@ on:
     # 每天北京时间9点 = UTC 1点
     - cron: '0 1 * * *'
   workflow_dispatch:
-    inputs:
-      notify:
-        description: '启用 @everyone 通知'
-        required: false
-        default: 'true'
 
 jobs:
   post:
@@ -20,79 +15,96 @@ jobs:
         with:
           python-version: '3.x'
       
-      - name: Fetch and Post to Discord
+      - name: Install Playwright
         run: |
-          pip install requests
+          pip install playwright
+          playwright install chromium --with-deps
+      
+      - name: Fetch codes and post to Discord
+        run: |
           python3 << 'EOF'
+          import asyncio
+          from playwright.async_api import async_playwright
           import requests
-          import re
           from datetime import datetime
           
-          headers = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          }
-          
-          url = "https://deltaforcetools.gg/"
-          
-          # Default codes
-          codes = {
-              'Dam': '4010',
-              'Layali Grove': '4324',
-              'Brakkesh': '0182',
-              'Space City': '6428',
-              'Tide Prison': '0912'
-          }
-          
-          try:
-              response = requests.get(url, headers=headers, timeout=30)
-              html = response.text
+          async def fetch_and_post():
+              codes = {
+                  'Dam': '4601',
+                  'Layali Grove': '4890',
+                  'Brakkesh': '0896',
+                  'Space City': '4025',
+                  'Tide Prison': '0092'
+              }
               
-              # Try to find codes in the HTML
-              # Pattern: location name followed by a 4-digit code
-              patterns = [
-                  r'Dam</[^>]*>[^<]*<[^>]*>(\d{4})',
-                  r'Dam[^<]{0,50}(\d{4})',
-                  r'"Dam"\s*:\s*"(\d{4})"',
-              ]
+              try:
+                  async with async_playwright() as p:
+                      browser = await p.chromium.launch(headless=True)
+                      page = await browser.new_page()
+                      
+                      # Set viewport
+                      await page.set_viewport_size({"width": 1920, "height": 1080})
+                      
+                      await page.goto("https://deltaforcetools.gg/", timeout=60000)
+                      
+                      # Wait for content to load
+                      await page.wait_for_timeout(3000)
+                      
+                      # Try to find code elements - look for patterns like "Dam</div>CODE</div>"
+                      content = await page.content()
+                      
+                      # Look for code patterns in the rendered HTML
+                      import re
+                      
+                      # Pattern: Dam followed by 4 digits
+                      patterns = [
+                          r'Dam</[^>]*>\s*<[^>]*>(\d{4})',
+                          r'Dam[^>]*>(\d{4})',
+                          r'"Dam"\s*:\s*"?(\d{4})"?',
+                      ]
+                      
+                      for pattern in patterns:
+                          matches = re.findall(pattern, content, re.IGNORECASE)
+                          if matches and len(matches) >= 5:
+                              # Found 5 or more 4-digit codes
+                              valid_codes = [m for m in matches if m.isdigit() and len(m) == 4]
+                              if len(valid_codes) >= 5:
+                                  codes_list = valid_codes[:5]
+                                  codes = {
+                                      'Dam': codes_list[0],
+                                      'Layali Grove': codes_list[1],
+                                      'Brakkesh': codes_list[2],
+                                      'Space City': codes_list[3],
+                                      'Tide Prison': codes_list[4]
+                                  }
+                                  break
+                      
+                      await browser.close()
+                      print(f"Fetched codes: {codes}")
+                      
+              except Exception as e:
+                  print(f"Error fetching codes: {e}")
+                  print("Using default codes")
               
-              found_codes = {}
-              for pattern in patterns:
-                  matches = re.findall(pattern, html, re.IGNORECASE)
-                  if matches:
-                      found_codes['Dam'] = matches[0]
-                      break
+              # Build message
+              today = datetime.now().strftime("%Y-%m-%d")
+              message = f"**🎮 Delta Force Daily Codes - {today}**\n\n"
+              for loc, code in codes.items():
+                  message += f"📍 **{loc}**: `{code}`\n"
+              message += "\n_Source: deltaforcetools.gg_"
               
-              # Look for other locations
-              for loc in ['Layali Grove', 'Brakkesh', 'Space City', 'Tide Prison']:
-                  loc_pattern = f'{loc}[^<]{{0,50}}(\d{{4}})'
-                  matches = re.findall(loc_pattern, html, re.IGNORECASE)
-                  if matches:
-                      codes[loc] = matches[0]
+              # Send to Discord
+              webhook_url = "https://discord.com/api/webhooks/1514440541977448558/lkxUi2tSqgvG8WXCyJLpMgJFzJqFVYp-HkAQZJUmUiOLC4k52T-13TnpqhZt3yRr5y2_"
               
-          except Exception as e:
-              pass
+              payload = {"content": message}
+              response = requests.post(webhook_url, json=payload, timeout=30)
+              print(f"Discord response: {response.status_code}")
+              
+              if response.status_code in [200, 204]:
+                  print("Posted successfully!")
+              else:
+                  print(f"Failed: {response.text}")
           
-          today = datetime.now().strftime("%Y-%m-%d")
-          
-          # Check if we should notify
-          notify = '''${{ github.event.inputs.notify }}'''.lower() == 'true'
-          
-          message = ""
-          if notify:
-              message += "@door code notifications \n\n"
-          
-          message += f"**🎮 Delta Force Daily Codes - {today}**\n\n"
-          for loc, code in codes.items():
-              message += f"📍 **{loc}**: `{code}`\n"
-          message += "\n_Source: deltaforcetools.gg_"
-          
-          webhook_url = "https://discord.com/api/webhooks/1514440541977448558/lkxUi2tSqgvG8WXCyJLpMgJFzJqFVYp-HkAQZJUmUiOLC4k52T-13TnpqhZt3yRr5y2_"
-          
-          payload = {"content": message}
-          response = requests.post(webhook_url, json=payload, timeout=30)
-          print(f"Status: {response.status_code}")
-          if response.status_code in [200, 204]:
-              print("Successfully posted to Discord!")
-          else:
-              print(f"Failed: {response.text}")
+          # Run the async function
+          asyncio.run(fetch_and_post())
           EOF
