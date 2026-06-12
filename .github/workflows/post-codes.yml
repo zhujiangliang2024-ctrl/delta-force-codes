@@ -15,21 +15,54 @@ jobs:
         with:
           python-version: '3.x'
       
-      - name: Install Playwright
+      - name: Fetch and Post to Discord
         run: |
-          pip install playwright
-          playwright install chromium --with-deps
-      
-      - name: Fetch codes, screenshot and post to Discord
-        run: |
+          pip install requests
           python3 << 'EOF'
-          import asyncio
-          from playwright.async_api import async_playwright
           import requests
-          import os
+          import re
           from datetime import datetime
           
-          async def fetch_and_post():
+          headers = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          }
+          
+          url = "https://deltaforcetools.gg/"
+          
+          try:
+              response = requests.get(url, headers=headers, timeout=30)
+              html_content = response.text
+              
+              # Find the data section containing daily codes
+              idx = html_content.find('"2e:')
+              end_idx = html_content.find('"])', idx)
+              
+              if idx != -1 and end_idx != -1:
+                  section = html_content[idx:end_idx]
+                  # Unescape the JavaScript string literals
+                  unescaped = section.replace('\\"', '"')
+                  
+                  # Extract codes: "pwd":"XXXX"
+                  codes_list = re.findall(r'"pwd":"(\d{4})"', unescaped)
+                  # Extract locations: "en":"LOCATION"
+                  locs_list = re.findall(r'"en":"([^"]+)"', unescaped)
+                  
+                  # Build codes dictionary
+                  codes = {}
+                  for i, loc in enumerate(locs_list):
+                      if i < len(codes_list):
+                          codes[loc] = codes_list[i]
+              else:
+                  # Fallback codes if parsing fails
+                  codes = {
+                      'Dam': '4601',
+                      'Layali Grove': '4890',
+                      'Brakkesh': '0896',
+                      'Space City': '4025',
+                      'Tide Prison': '0092'
+                  }
+          except Exception as e:
+              # Fallback codes
               codes = {
                   'Dam': '4601',
                   'Layali Grove': '4890',
@@ -37,98 +70,23 @@ jobs:
                   'Space City': '4025',
                   'Tide Prison': '0092'
               }
-              screenshot_path = "/tmp/daily_codes.png"
-              
-              try:
-                  async with async_playwright() as p:
-                      browser = await p.chromium.launch(headless=True)
-                      page = await browser.new_page()
-                      
-                      # Set viewport
-                      await page.set_viewport_size({"width": 1920, "height": 1080})
-                      
-                      await page.goto("https://deltaforcetools.gg/", timeout=60000)
-                      
-                      # Wait for content to load
-                      await page.wait_for_timeout(3000)
-                      
-                      # Try to find and click on Daily Codes section to expand it
-                      try:
-                          daily_codes_header = page.locator("text=Daily Codes")
-                          if daily_codes_header:
-                              daily_codes_header.first.click()
-                              await page.wait_for_timeout(1000)
-                      except:
-                          pass
-                      
-                      # Take screenshot of the page
-                      await page.screenshot(path=screenshot_path, full_page=False)
-                      print(f"Screenshot saved to {screenshot_path}")
-                      
-                      # Try to extract codes from rendered HTML
-                      content = await page.content()
-                      import re
-                      
-                      patterns = [
-                          r'Dam</[^>]*>\s*<[^>]*>(\d{4})',
-                          r'Dam[^>]*>(\d{4})',
-                          r'"Dam"\s*:\s*"?(\d{4})"?',
-                      ]
-                      
-                      for pattern in patterns:
-                          matches = re.findall(pattern, content, re.IGNORECASE)
-                          if matches and len(matches) >= 5:
-                              valid_codes = [m for m in matches if m.isdigit() and len(m) == 4]
-                              if len(valid_codes) >= 5:
-                                  codes_list = valid_codes[:5]
-                                  codes = {
-                                      'Dam': codes_list[0],
-                                      'Layali Grove': codes_list[1],
-                                      'Brakkesh': codes_list[2],
-                                      'Space City': codes_list[3],
-                                      'Tide Prison': codes_list[4]
-                                  }
-                                  break
-                      
-                      await browser.close()
-                      print(f"Fetched codes: {codes}")
-                      
-              except Exception as e:
-                  print(f"Error: {e}")
-                  print("Using default codes")
-              
-              # Build message
-              today = datetime.now().strftime("%Y-%m-%d")
-              message = f"**🎮 Delta Force Daily Codes - {today}**\n\n"
-              for loc, code in codes.items():
-                  message += f"📍 **{loc}**: `{code}`\n"
-              message += "\n_Source: deltaforcetools.gg_"
-              
-              # Send to Discord with image
-              webhook_url = "https://discord.com/api/webhooks/1514440541977448558/lkxUi2tSqgvG8WXCyJLpMgJFzJqFVYp-HkAQZJUmUiOLC4k52T-13TnpqhZt3yRr5y2_"
-              
-              # Check if screenshot exists
-              if os.path.exists(screenshot_path):
-                  # Send message with image using multipart/form-data
-                  with open(screenshot_path, 'rb') as f:
-                      files = {'file': ('daily_codes.png', f, 'image/png')}
-                      data = {
-                          'content': message,
-                          'payload_json': '{"content":"' + message.replace('"', '\\"') + '"}'
-                      }
-                      response = requests.post(webhook_url, files=files, data=data, timeout=60)
-                  print(f"Discord response with image: {response.status_code}")
-              else:
-                  # Send text only
-                  payload = {"content": message}
-                  response = requests.post(webhook_url, json=payload, timeout=30)
-                  print(f"Discord response (text only): {response.status_code}")
-              
-              if response.status_code in [200, 204]:
-                  print("Posted successfully!")
-              else:
-                  print(f"Failed: {response.text}")
           
-          # Run the async function
-          asyncio.run(fetch_and_post())
+          today = datetime.now().strftime("%Y-%m-%d")
+          
+          # Build message
+          message = "@door code notifications \n\n"
+          message += f"**🎮 Delta Force Daily Codes - {today}**\n\n"
+          for loc, code in codes.items():
+              message += f"📍 **{loc}**: `{code}`\n"
+          message += "\n_Source: deltaforcetools.gg_"
+          
+          webhook_url = "https://discord.com/api/webhooks/1514440541977448558/lkxUi2tSqgvG8WXCyJLpMgJFzJqFVYp-HkAQZJUmUiOLC4k52T-13TnpqhZt3yRr5y2_"
+          
+          payload = {"content": message}
+          response = requests.post(webhook_url, json=payload, timeout=30)
+          print(f"Status: {response.status_code}")
+          if response.status_code in [200, 204]:
+              print("Successfully posted to Discord!")
+          else:
+              print(f"Failed: {response.text}")
           EOF
