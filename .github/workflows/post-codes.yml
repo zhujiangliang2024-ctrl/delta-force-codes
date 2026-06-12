@@ -46,47 +46,63 @@ jobs:
                   codes_list = re.findall(r'"pwd":"(\d{4})"', unescaped)
                   # Extract locations: "en":"LOCATION"
                   locs_list = re.findall(r'"en":"([^"]+)"', unescaped)
+                  # Extract image URLs: "pic":"URL"
+                  pics_list = re.findall(r'"pic":"([^"]+)"', unescaped)
                   
-                  # Build codes dictionary
+                  # Build codes dictionary with images
                   codes = {}
                   for i, loc in enumerate(locs_list):
                       if i < len(codes_list):
-                          codes[loc] = codes_list[i]
+                          pic_url = pics_list[i] if i < len(pics_list) else ""
+                          codes[loc] = {"code": codes_list[i], "pic": pic_url}
               else:
-                  # Fallback codes if parsing fails
-                  codes = {
-                      'Dam': '4601',
-                      'Layali Grove': '4890',
-                      'Brakkesh': '0896',
-                      'Space City': '4025',
-                      'Tide Prison': '0092'
-                  }
+                  codes = {}
           except Exception as e:
-              # Fallback codes
-              codes = {
-                  'Dam': '4601',
-                  'Layali Grove': '4890',
-                  'Brakkesh': '0896',
-                  'Space City': '4025',
-                  'Tide Prison': '0092'
-              }
+              codes = {}
           
           today = datetime.now().strftime("%Y-%m-%d")
           
-          # Build message
-          message = "@door code notifications \n\n"
-          message += f"**🎮 Delta Force Daily Codes - {today}**\n\n"
-          for loc, code in codes.items():
-              message += f"📍 **{loc}**: `{code}`\n"
-          message += "\n_Source: deltaforcetools.gg_"
-          
           webhook_url = "https://discord.com/api/webhooks/1514440541977448558/lkxUi2tSqgvG8WXCyJLpMgJFzJqFVYp-HkAQZJUmUiOLC4k52T-13TnpqhZt3yRr5y2_"
           
-          payload = {"content": message}
+          # Build embed message with images
+          payload = {
+              "content": "@door code notifications",
+              "embeds": [
+                  {
+                      "title": f"🎮 Delta Force Daily Codes - {today}",
+                      "color": 5814783,  # Green color
+                      "fields": [],
+                      "footer": {
+                          "text": "Source: deltaforcetools.gg"
+                      }
+                  }
+              ]
+          }
+          
+          # Add fields for each location
+          for loc, data in codes.items():
+              field = {
+                  "name": f"📍 {loc}",
+                  "value": f"Code: `{data['code']}`",
+                  "inline": True
+              }
+              payload["embeds"][0]["fields"].append(field)
+          
+          # Add thumbnail images for each location
+          for loc, data in codes.items():
+              if data['pic']:
+                  # Add location image as additional field with inline image reference
+                  thumbnail_url = data['pic'].split('?')[0] + "?wx_fmt=png" if data['pic'] else ""
+                  # For webhooks, we can add one image per embed, so we'll use the first location's image
+                  if "image" not in payload["embeds"][0]:
+                      payload["embeds"][0]["image"] = {"url": data['pic']}
+                      payload["embeds"][0]["thumbnail"] = {"url": data['pic']}
+                  break
+          
           response = requests.post(webhook_url, json=payload, timeout=30)
           print(f"Status: {response.status_code}")
           if response.status_code in [200, 204]:
               print("Successfully posted to Discord!")
           else:
-              print(f"Failed: {response.text}")
+            print(f"Failed: {response.text}")
           EOF
