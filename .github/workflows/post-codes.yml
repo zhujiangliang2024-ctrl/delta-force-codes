@@ -20,12 +20,13 @@ jobs:
           pip install playwright
           playwright install chromium --with-deps
       
-      - name: Fetch codes and post to Discord
+      - name: Fetch codes, screenshot and post to Discord
         run: |
           python3 << 'EOF'
           import asyncio
           from playwright.async_api import async_playwright
           import requests
+          import os
           from datetime import datetime
           
           async def fetch_and_post():
@@ -36,6 +37,7 @@ jobs:
                   'Space City': '4025',
                   'Tide Prison': '0092'
               }
+              screenshot_path = "/tmp/daily_codes.png"
               
               try:
                   async with async_playwright() as p:
@@ -50,13 +52,23 @@ jobs:
                       # Wait for content to load
                       await page.wait_for_timeout(3000)
                       
-                      # Try to find code elements - look for patterns like "Dam</div>CODE</div>"
-                      content = await page.content()
+                      # Try to find and click on Daily Codes section to expand it
+                      try:
+                          daily_codes_header = page.locator("text=Daily Codes")
+                          if daily_codes_header:
+                              daily_codes_header.first.click()
+                              await page.wait_for_timeout(1000)
+                      except:
+                          pass
                       
-                      # Look for code patterns in the rendered HTML
+                      # Take screenshot of the page
+                      await page.screenshot(path=screenshot_path, full_page=False)
+                      print(f"Screenshot saved to {screenshot_path}")
+                      
+                      # Try to extract codes from rendered HTML
+                      content = await page.content()
                       import re
                       
-                      # Pattern: Dam followed by 4 digits
                       patterns = [
                           r'Dam</[^>]*>\s*<[^>]*>(\d{4})',
                           r'Dam[^>]*>(\d{4})',
@@ -66,7 +78,6 @@ jobs:
                       for pattern in patterns:
                           matches = re.findall(pattern, content, re.IGNORECASE)
                           if matches and len(matches) >= 5:
-                              # Found 5 or more 4-digit codes
                               valid_codes = [m for m in matches if m.isdigit() and len(m) == 4]
                               if len(valid_codes) >= 5:
                                   codes_list = valid_codes[:5]
@@ -83,7 +94,7 @@ jobs:
                       print(f"Fetched codes: {codes}")
                       
               except Exception as e:
-                  print(f"Error fetching codes: {e}")
+                  print(f"Error: {e}")
                   print("Using default codes")
               
               # Build message
@@ -93,12 +104,25 @@ jobs:
                   message += f"📍 **{loc}**: `{code}`\n"
               message += "\n_Source: deltaforcetools.gg_"
               
-              # Send to Discord
+              # Send to Discord with image
               webhook_url = "https://discord.com/api/webhooks/1514440541977448558/lkxUi2tSqgvG8WXCyJLpMgJFzJqFVYp-HkAQZJUmUiOLC4k52T-13TnpqhZt3yRr5y2_"
               
-              payload = {"content": message}
-              response = requests.post(webhook_url, json=payload, timeout=30)
-              print(f"Discord response: {response.status_code}")
+              # Check if screenshot exists
+              if os.path.exists(screenshot_path):
+                  # Send message with image using multipart/form-data
+                  with open(screenshot_path, 'rb') as f:
+                      files = {'file': ('daily_codes.png', f, 'image/png')}
+                      data = {
+                          'content': message,
+                          'payload_json': '{"content":"' + message.replace('"', '\\"') + '"}'
+                      }
+                      response = requests.post(webhook_url, files=files, data=data, timeout=60)
+                  print(f"Discord response with image: {response.status_code}")
+              else:
+                  # Send text only
+                  payload = {"content": message}
+                  response = requests.post(webhook_url, json=payload, timeout=30)
+                  print(f"Discord response (text only): {response.status_code}")
               
               if response.status_code in [200, 204]:
                   print("Posted successfully!")
