@@ -2,8 +2,8 @@ name: Post Daily Codes to Discord
 
 on:
   schedule:
-    # 每天北京时间8点 = UTC 0点
-    - cron: '0 0 * * *'
+    # 每天北京时间21点 = UTC 13点 (期望次日8-10点到达)
+    - cron: '0 13 * * *'
   workflow_dispatch:
 
 jobs:
