@@ -11,6 +11,34 @@ jobs:
         with:
           python-version: '3.x'
       
+      - name: Wait for website update (08:01)
+        run: |
+          python3 << 'EOF'
+          from datetime import datetime
+          import time
+          
+          # Wait until 08:01 to ensure website has updated
+          now = datetime.now()
+          target_hour = 8
+          target_minute = 1
+          
+          # Calculate seconds to wait
+          current_minutes = now.hour * 60 + now.minute
+          target_minutes = target_hour * 60 + target_minute
+          
+          # If it's before 08:01, wait until 08:01
+          # If it's after 08:01, still wait 60 seconds to ensure update is complete
+          if current_minutes < target_minutes:
+              wait_seconds = (target_minutes - current_minutes) * 60 - now.second
+          else:
+              wait_seconds = 60  # Wait 60 seconds after 08:01
+          
+          print(f"Current time: {now.strftime('%H:%M:%S')}")
+          print(f"Waiting {wait_seconds} seconds for website update...")
+          time.sleep(max(wait_seconds, 60))  # At least 60 seconds wait
+          print("Wait complete, fetching codes now")
+          EOF
+      
       - name: Fetch and Post to Discord
         run: |
           pip install requests
@@ -25,31 +53,52 @@ jobs:
           
           url = "https://deltaforcetools.gg/"
           
-          try:
-              response = requests.get(url, headers=headers, timeout=30)
-              html_content = response.text
-              
-              # Find the data section containing daily codes
-              idx = html_content.find('"2e:')
-              end_idx = html_content.find('"])', idx)
-              
-              if idx != -1 and end_idx != -1:
-                  section = html_content[idx:end_idx]
-                  unescaped = section.replace('\\"', '"')
+          # Fetch and retry logic
+          max_retries = 3
+          codes = {}
+          
+          for attempt in range(max_retries):
+              try:
+                  response = requests.get(url, headers=headers, timeout=30)
+                  html_content = response.text
                   
-                  codes_list = re.findall(r'"pwd":"(\d{4})"', unescaped)
-                  locs_list = re.findall(r'"en":"([^"]+)"', unescaped)
-                  pics_list = re.findall(r'"pic":"([^"]+)"', unescaped)
+                  # Find the data section containing daily codes
+                  idx = html_content.find('"2e:')
+                  end_idx = html_content.find('])', idx)
                   
-                  codes = {}
-                  for i, loc in enumerate(locs_list):
-                      if i < len(codes_list):
-                          pic_url = pics_list[i] if i < len(pics_list) else ""
-                          codes[loc] = {"code": codes_list[i], "pic": pic_url}
-              else:
-                  codes = {}
-          except Exception as e:
-              codes = {}
+                  if idx != -1 and end_idx != -1:
+                      section = html_content[idx:end_idx]
+                      unescaped = section.replace('\\"', '"')
+                      
+                      codes_list = re.findall(r'"pwd":"(\d{4})"', unescaped)
+                      locs_list = re.findall(r'"en":"([^"]+)"', unescaped)
+                      pics_list = re.findall(r'"pic":"([^"]+)"', unescaped)
+                      
+                      codes = {}
+                      for i, loc in enumerate(locs_list):
+                          if i < len(codes_list):
+                              pic_url = pics_list[i] if i < len(pics_list) else ""
+                              codes[loc] = {"code": codes_list[i], "pic": pic_url}
+                      
+                      # Verify we got 5 codes
+                      if len(codes) >= 5:
+                          print(f"Successfully fetched {len(codes)} location codes")
+                          break
+                      else:
+                          print(f"Attempt {attempt+1}: Only got {len(codes)} codes, retrying...")
+                          codes = {}
+                          import time
+                          time.sleep(30)
+                  else:
+                      print(f"Attempt {attempt+1}: Could not find codes section, retrying...")
+                      import time
+                      time.sleep(30)
+              except Exception as e:
+                  print(f"Attempt {attempt+1}: Error - {e}")
+                  if attempt == max_retries - 1:
+                      codes = {}
+                  import time
+                  time.sleep(30)
           
           today = datetime.now().strftime("%Y-%m-%d")
           
@@ -77,7 +126,7 @@ jobs:
           response = requests.post(webhook_url, json=payload, timeout=30)
           print(f"Status: {response.status_code}")
           if response.status_code in [200, 204]:
-              print("Successfully posted 5 images to Discord!")
+              print("Successfully posted to Discord!")
           else:
               print(f"Failed: {response.text}")
           EOF
