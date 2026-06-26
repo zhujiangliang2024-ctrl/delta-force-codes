@@ -116,7 +116,7 @@ jobs:
           now_beijing = now_utc.astimezone(Beijing_tz)
           today = now_beijing.strftime("%Y-%m-%d")
           
-          webhook_url = "https://discord.com/api/webhooks/1519171346347720876/eC3P8_zlNKskE77p9Q4VhjB4PTYY6hZIqWZRDDs7iW50YmRnyRs0cQxaJbD9z7btUra8"
+          webhook_url = "https://discord.com/api/webhooks/1519996671399039060/OJgrVrjLMSmYtYII6bIeGIX9WKVxa6TrhNodF9W1OaC5GqFILw5NT2l3nuQFTVKMd8JK"
           
           embeds = []
           for loc, data in codes.items():
