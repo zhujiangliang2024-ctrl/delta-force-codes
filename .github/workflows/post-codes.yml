@@ -1,7 +1,7 @@
 name: Post Daily Codes to Discord
 
 on:
-  workflow_dispatch:
+  workflow_dispatch
   push:
     branches:
       - main
