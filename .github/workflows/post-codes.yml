@@ -57,6 +57,8 @@ jobs:
           EOF
       
       - name: Fetch and Post to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
           pip install requests
           python3 << 'EOF'
