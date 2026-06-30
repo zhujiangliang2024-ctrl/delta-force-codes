@@ -1,0 +1,10 @@
+name: Door Codes Simple
+
+on: workflow_dispatch
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Discord
+        run: echo "Testing workflow_dispatch"
