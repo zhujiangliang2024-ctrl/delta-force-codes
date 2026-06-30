@@ -1,10 +1,151 @@
-name: Test Door Codes
+name: Post Daily Codes to Discord
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
 
 jobs:
-  test:
+  post:
     runs-on: ubuntu-latest
     steps:
-      - name: Test step
-        run: echo "Testing workflow_dispatch trigger"
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      
+      - name: Wait for website update (08:01 Beijing)
+        run: |
+          python3 << 'EOF'
+          from datetime import datetime, timezone, timedelta
+          import time
+          
+          # Beijing timezone
+          Beijing_tz = timezone(timedelta(hours=8))
+          
+          while True:
+              now_utc = datetime.now(timezone.utc)
+              now_beijing = now_utc.astimezone(Beijing_tz)
+              
+              current_hour = now_beijing.hour
+              current_minute = now_beijing.minute
+              
+              print(f"Current Beijing time: {now_beijing.strftime('%H:%M:%S')}")
+              
+              # If it's 08:01 or later, we can proceed
+              if current_hour > 8 or (current_hour == 8 and current_minute >= 1):
+                  print("Website should have updated, proceeding...")
+                  break
+              
+              # If it's before 08:00, wait until 08:01
+              if current_hour < 8:
+                  wait_seconds = (8 - current_hour) * 3600 - current_minute * 60 - now_beijing.second
+                  print(f"Waiting {wait_seconds} seconds until 08:01...")
+                  time.sleep(min(wait_seconds, 300))  # Max 5 min sleep
+              elif current_hour == 8 and current_minute == 0:
+                  # It's exactly 08:00, wait 60 seconds
+                  print("It's 08:00 Beijing, waiting 60 seconds for update...")
+                  time.sleep(60)
+              
+              # If it's 08:00-08:01, wait until 08:01
+              if current_hour == 8 and current_minute == 0:
+                  time.sleep(60)
+                  print("Waited 60 seconds, proceeding...")
+                  break
+          
+          # Additional wait to ensure update is complete
+          print("Waiting additional 30 seconds for website update...")
+          time.sleep(30)
+          print("Fetching codes now...")
+          EOF
+      
+      - name: Fetch and Post to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          pip install requests
+          python3 << 'EOF'
+          import os
+import requests
+          import re
+          from datetime import datetime, timezone, timedelta
+          
+          headers = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          }
+          
+          url = "https://deltaforcetools.gg/"
+          
+          # Fetch with retry
+          max_retries = 3
+          codes = {}
+          
+          for attempt in range(max_retries):
+              try:
+                  response = requests.get(url, headers=headers, timeout=30)
+                  html_content = response.text
+                  
+                  idx = html_content.find('"2e:')
+                  end_idx = html_content.find('])', idx)
+                  
+                  if idx != -1 and end_idx != -1:
+                      section = html_content[idx:end_idx]
+                      unescaped = section.replace('\\"', '"')
+                      
+                      codes_list = re.findall(r'"pwd":"(\d{4})"', unescaped)
+                      locs_list = re.findall(r'"en":"([^"]+)"', unescaped)
+                      pics_list = re.findall(r'"pic":"([^"]+)"', unescaped)
+                      
+                      codes = {}
+                      for i, loc in enumerate(locs_list):
+                          if i < len(codes_list):
+                              pic_url = pics_list[i] if i < len(pics_list) else ""
+                              codes[loc] = {"code": codes_list[i], "pic": pic_url}
+                      
+                      if len(codes) >= 5:
+                          print(f"Successfully fetched {len(codes)} location codes")
+                          break
+                      else:
+                          print(f"Attempt {attempt+1}: Only got {len(codes)} codes, retrying...")
+                          codes = {}
+                          time.sleep(30)
+                  else:
+                      print(f"Attempt {attempt+1}: Could not find codes section")
+                      time.sleep(30)
+              except Exception as e:
+                  print(f"Attempt {attempt+1}: Error - {e}")
+                  time.sleep(30)
+          
+          # Get Beijing time for footer
+          Beijing_tz = timezone(timedelta(hours=8))
+          now_utc = datetime.now(timezone.utc)
+          now_beijing = now_utc.astimezone(Beijing_tz)
+          today = now_beijing.strftime("%Y-%m-%d")
+          
+          webhook_url = os.environ.get("DISCORD_WEBHOOK")
+          
+          embeds = []
+          for loc, data in codes.items():
+              embed = {
+                  "title": f"📍 {loc}",
+                  "description": f"**Code:** `{data['code']}`",
+                  "color": 5814783,
+                  "image": {"url": data['pic']} if data['pic'] else None,
+                  "footer": {"text": f"deltaforcetools.gg • {today}"}
+              }
+              embed = {k: v for k, v in embed.items() if v is not None}
+              embeds.append(embed)
+          
+          payload = {
+              "content": f"@door code notifications\n\n**🎮 Delta Force Daily Codes - {today}**",
+              "embeds": embeds
+          }
+          
+          response = requests.post(webhook_url, json=payload, timeout=30)
+          print(f"Discord status: {response.status_code}")
+          if response.status_code in [200, 204]:
+              print("Successfully posted to Discord!")
+          else:
+              print(f"Failed: {response.text}")
+          EOF
