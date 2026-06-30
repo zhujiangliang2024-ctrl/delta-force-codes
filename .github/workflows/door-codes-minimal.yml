@@ -1,0 +1,28 @@
+name: Door Codes Minimal
+
+on: workflow_dispatch
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Fetch and Post
+        run: |
+          pip install requests
+          python3 << 'EOF'
+          import os
+          import requests
+          
+          webhook_url = os.environ.get("DISCORD_WEBHOOK")
+          print(f"Webhook: {webhook_url}")
+          
+          payload = {"content": "Test message from workflow"}
+          response = requests.post(webhook_url, json=payload)
+          print(f"Status: {response.status_code}")
+          EOF
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
