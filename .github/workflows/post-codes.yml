@@ -66,6 +66,7 @@ jobs:
           pip install requests
           python3 << 'EOF'
           import os
+                    import os
           import requests
           import re
           from datetime import datetime, timezone, timedelta
@@ -85,36 +86,29 @@ jobs:
                   response = requests.get(url, headers=headers, timeout=30)
                   html_content = response.text
                   
-                  idx = html_content.find('"2e:')
-                  end_idx = html_content.find('])', idx)
+                  # Find Daily Codes section and extract data from HTML
+                  idx_start = html_content.find('Daily Codes')
+                  section_end = html_content.find('Auction House', idx_start)
+                  section = html_content[idx_start:section_end]
                   
-                  if idx != -1 and end_idx != -1:
-                      section = html_content[idx:end_idx]
-                      unescaped = section.replace('\\"', '"')
-                      
-                      codes_list = re.findall(r'"pwd":"(\d{4})"', unescaped)
-                      locs_list = re.findall(r'"en":"([^"]+)"', unescaped)
-                      pics_list = re.findall(r'"pic":"([^"]+)"', unescaped)
-                      
-                      codes = {}
-                      for i, loc in enumerate(locs_list):
-                          if i < len(codes_list):
-                              pic_url = pics_list[i] if i < len(pics_list) else ""
-                              codes[loc] = {"code": codes_list[i], "pic": pic_url}
-                      
-                      if len(codes) >= 5:
-                          print(f"Successfully fetched {len(codes)} location codes")
-                          break
-                      else:
-                          print(f"Attempt {attempt+1}: Only got {len(codes)} codes, retrying...")
-                          codes = {}
-                          time.sleep(30)
+                  # Extract card_name and codes from HTML structure
+                  card_names = re.findall(r'text-xs font-normal">([^<]+)</div>.*?text-3xl font-bold">(\d{4})<', section, re.DOTALL)
+                  
+                  codes = {}
+                  for name, code in card_names:
+                      name = name.strip()
+                      codes[name] = {"code": code, "pic": ""}
+                  
+                  if len(codes) >= 5:
+                      print(f"Successfully fetched {len(codes)} location codes")
+                      break
                   else:
-                      print(f"Attempt {attempt+1}: Could not find codes section")
+                      print(f"Attempt {attempt+1}: Only got {len(codes)} codes, retrying...")
                       time.sleep(30)
               except Exception as e:
                   print(f"Attempt {attempt+1}: Error - {e}")
                   time.sleep(30)
+
           
           # Get Beijing time for footer
           Beijing_tz = timezone(timedelta(hours=8))
