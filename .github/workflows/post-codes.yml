@@ -20,7 +20,6 @@ jobs:
           from datetime import datetime, timezone, timedelta
           import time
           
-          # Beijing timezone
           Beijing_tz = timezone(timedelta(hours=8))
           
           while True:
@@ -32,28 +31,23 @@ jobs:
               
               print(f"Current Beijing time: {now_beijing.strftime('%H:%M:%S')}")
               
-              # If it's 08:01 or later, we can proceed
               if current_hour > 8 or (current_hour == 8 and current_minute >= 1):
                   print("Website should have updated, proceeding...")
                   break
               
-              # If it's before 08:00, wait until 08:01
               if current_hour < 8:
                   wait_seconds = (8 - current_hour) * 3600 - current_minute * 60 - now_beijing.second
                   print(f"Waiting {wait_seconds} seconds until 08:01...")
-                  time.sleep(min(wait_seconds, 300))  # Max 5 min sleep
+                  time.sleep(min(wait_seconds, 300))
               elif current_hour == 8 and current_minute == 0:
-                  # It's exactly 08:00, wait 60 seconds
                   print("It's 08:00 Beijing, waiting 60 seconds for update...")
                   time.sleep(60)
               
-              # If it's 08:00-08:01, wait until 08:01
               if current_hour == 8 and current_minute == 0:
                   time.sleep(60)
                   print("Waited 60 seconds, proceeding...")
                   break
           
-          # Additional wait to ensure update is complete
           print("Waiting additional 30 seconds for website update...")
           time.sleep(30)
           print("Fetching codes now...")
@@ -66,7 +60,6 @@ jobs:
           pip install requests
           python3 << 'EOF'
           import os
-                    
           import requests
           import re
           from datetime import datetime, timezone, timedelta
@@ -77,34 +70,32 @@ jobs:
           
           url = "https://deltaforcetools.gg/"
           
-          # Fetch with retry
           max_retries = 3
           codes = {}
           
-                            # Find Daily Codes section and extract data from HTML
+          for attempt in range(max_retries):
+              try:
+                  response = requests.get(url, headers=headers, timeout=30)
+                  html_content = response.text
+                  
                   idx_start = html_content.find('Daily Codes')
                   section_end = html_content.find('Auction House', idx_start)
                   section = html_content[idx_start:section_end]
                   
-                  # Split by bg-full-cover to get individual cards
                   cards = section.split('bg-full-cover')
                   
                   codes = {}
                   for card in cards[1:]:
-                      # Extract image URL
                       img_match = re.search(r'background-image:url\(([^)]+)\)', card)
                       img_url = f"https://deltaforcetools.gg{img_match.group(1)}" if img_match else ""
                       
-                      # Extract name
                       name_match = re.search(r'text-xs font-normal">([^<]+)</div>', card)
                       name = name_match.group(1) if name_match else "Unknown"
                       
-                      # Extract code
                       code_match = re.search(r'font-bold">(\d{4})</div>', card)
                       code = code_match.group(1) if code_match else "0000"
                       
                       codes[name] = {"code": code, "pic": img_url}
-
                   
                   if len(codes) >= 5:
                       print(f"Successfully fetched {len(codes)} location codes")
@@ -115,9 +106,7 @@ jobs:
               except Exception as e:
                   print(f"Attempt {attempt+1}: Error - {e}")
                   time.sleep(30)
-
           
-          # Get Beijing time for footer
           Beijing_tz = timezone(timedelta(hours=8))
           now_utc = datetime.now(timezone.utc)
           now_beijing = now_utc.astimezone(Beijing_tz)
@@ -149,3 +138,4 @@ jobs:
           else:
               print(f"Failed: {response.text}")
           EOF
+
