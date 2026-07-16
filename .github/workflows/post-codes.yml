@@ -81,23 +81,30 @@ jobs:
           max_retries = 3
           codes = {}
           
-          for attempt in range(max_retries):
-              try:
-                  response = requests.get(url, headers=headers, timeout=30)
-                  html_content = response.text
-                  
-                  # Find Daily Codes section and extract data from HTML
+                            # Find Daily Codes section and extract data from HTML
                   idx_start = html_content.find('Daily Codes')
                   section_end = html_content.find('Auction House', idx_start)
                   section = html_content[idx_start:section_end]
                   
-                  # Extract card_name and codes from HTML structure
-                  card_names = re.findall(r'text-xs font-normal">([^<]+)</div>.*?text-3xl font-bold">(\d{4})<', section, re.DOTALL)
+                  # Split by bg-full-cover to get individual cards
+                  cards = section.split('bg-full-cover')
                   
                   codes = {}
-                  for name, code in card_names:
-                      name = name.strip()
-                      codes[name] = {"code": code, "pic": ""}
+                  for card in cards[1:]:
+                      # Extract image URL
+                      img_match = re.search(r'background-image:url\(([^)]+)\)', card)
+                      img_url = f"https://deltaforcetools.gg{img_match.group(1)}" if img_match else ""
+                      
+                      # Extract name
+                      name_match = re.search(r'text-xs font-normal">([^<]+)</div>', card)
+                      name = name_match.group(1) if name_match else "Unknown"
+                      
+                      # Extract code
+                      code_match = re.search(r'font-bold">(\d{4})</div>', card)
+                      code = code_match.group(1) if code_match else "0000"
+                      
+                      codes[name] = {"code": code, "pic": img_url}
+
                   
                   if len(codes) >= 5:
                       print(f"Successfully fetched {len(codes)} location codes")
